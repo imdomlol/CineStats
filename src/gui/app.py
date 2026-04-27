@@ -61,7 +61,7 @@ from gui.widgets import (
 _PAD_X = 14
 _PAD_Y =  6
 _WIN_W = 640
-_WIN_H = 560
+_WIN_H = 720
 
 
 class App:
@@ -79,7 +79,7 @@ class App:
         self._root.title("CineStats")
         self._root.geometry(f"{_WIN_W}x{_WIN_H}")
         self._root.resizable(True, True)
-        self._root.minsize(520, 480)
+        self._root.minsize(520, 640)
 
         # Parsed row data cached after the user clicks "Load Files".
         # Keyed by report type; None until loaded.
@@ -333,7 +333,16 @@ class App:
         self._report_type_label.set(report_type)
         self._row_count_var.set(f"{len(rows):,} rows loaded")
         self._show_filters_for(report_type)
+        self._autofill_date_range(report_type, rows)
         self._status.set_success(f"Loaded {len(rows):,} rows from {len(self._file_picker.get())} file(s).")
+
+    def _autofill_date_range(self, report_type, rows):
+        """Sets the start/end date filter fields to the earliest and latest dates in the data."""
+        if report_type == REPORT_TYPE_OCCUPANCY:
+            dates = [r["date"] for r in rows if r.get("date") is not None]
+            if dates:
+                self._occ_start_date.set(min(dates).strftime("%Y-%m-%d"))
+                self._occ_end_date.set(max(dates).strftime("%Y-%m-%d"))
 
     def _on_load_error(self, message, tb):
         """Called on the main thread after a failed load."""
