@@ -14,7 +14,6 @@ __pycache__/
 # Compiled/distributed binaries
 dist/
 build/
-*.spec
 
 # OS artifacts
 .DS_Store
