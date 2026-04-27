@@ -11,6 +11,72 @@ import tkinter as tk
 from tkinter import filedialog, ttk
 
 
+# ── PlaceholderEntry ──────────────────────────────────────────────────────────
+
+
+class PlaceholderEntry(tk.Entry):
+    """
+    A tk.Entry that shows dimmed placeholder text when the field is empty.
+
+    The placeholder disappears when the user clicks into the field and reappears
+    if the user leaves the field empty. This avoids needing a separate label
+    to explain expected input format.
+
+    Example:
+        entry = PlaceholderEntry(frame, placeholder="YYYY-MM-DD", width=12)
+    """
+
+    _PLACEHOLDER_COLOUR = "#AAAAAA"
+    _NORMAL_COLOUR      = "#000000"
+
+    def __init__(self, parent, placeholder="", **kwargs):
+        super().__init__(parent, **kwargs)
+        self._placeholder = placeholder
+        self._showing_placeholder = False
+
+        self.bind("<FocusIn>",  self._on_focus_in)
+        self.bind("<FocusOut>", self._on_focus_out)
+
+        # Show placeholder immediately if the field starts empty.
+        self._on_focus_out(None)
+
+    def _on_focus_in(self, _event):
+        """Clears the placeholder text when the user clicks into the field."""
+        if self._showing_placeholder:
+            self.delete(0, tk.END)
+            self.config(fg=self._NORMAL_COLOUR)
+            self._showing_placeholder = False
+
+    def _on_focus_out(self, _event):
+        """Restores the placeholder text if the field is still empty."""
+        if not self.get():
+            self.insert(0, self._placeholder)
+            self.config(fg=self._PLACEHOLDER_COLOUR)
+            self._showing_placeholder = True
+
+    def get(self):
+        """Returns the user-typed value, or '' if the placeholder is showing."""
+        if self._showing_placeholder:
+            return ""
+        return super().get()
+
+    def set(self, value):
+        """Programmatically sets a real value (clears placeholder)."""
+        self._showing_placeholder = False
+        self.delete(0, tk.END)
+        if value:
+            self.config(fg=self._NORMAL_COLOUR)
+            self.insert(0, value)
+        else:
+            self._on_focus_out(None)
+
+    def clear(self):
+        """Empties the field and restores the placeholder."""
+        self.delete(0, tk.END)
+        self._showing_placeholder = False
+        self._on_focus_out(None)
+
+
 # ── FilePicker ────────────────────────────────────────────────────────────────
 
 

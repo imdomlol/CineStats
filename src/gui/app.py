@@ -39,11 +39,18 @@ from core.transformer import (
     summarize_transactions_by_employee,
     summarize_transactions_by_category,
 )
-from core.writer import write_occupancy, write_transaction_detail, write_summary
+from core.writer import (
+    write_occupancy,
+    write_transaction_detail,
+    write_summary,
+    write_occupancy_full,
+    write_transaction_full,
+)
 from gui.widgets import (
     FilePicker,
     LabeledEntry,
     LabeledCheckbox,
+    PlaceholderEntry,
     SectionLabel,
     StatusBar,
     ReportTypeLabel,
@@ -210,12 +217,11 @@ class App:
         date_row.columnconfigure(1, weight=1)
         date_row.columnconfigure(3, weight=1)
         tk.Label(date_row, text="Start date:", anchor="w", width=12).grid(row=0, column=0, sticky="w", padx=(0, 4))
-        self._occ_start_date = tk.Entry(date_row, width=12)
+        self._occ_start_date = PlaceholderEntry(date_row, placeholder="YYYY-MM-DD", width=12)
         self._occ_start_date.grid(row=0, column=1, sticky="w")
         tk.Label(date_row, text="  End date:", anchor="w", width=10).grid(row=0, column=2, sticky="w", padx=(8, 4))
-        self._occ_end_date = tk.Entry(date_row, width=12)
+        self._occ_end_date = PlaceholderEntry(date_row, placeholder="YYYY-MM-DD", width=12)
         self._occ_end_date.grid(row=0, column=3, sticky="w")
-        tk.Label(date_row, text="  (YYYY-MM-DD)", fg="#888888", font=("Calibri", 8)).grid(row=0, column=4, sticky="w", padx=(4, 0))
 
         # ── Output mode sub-section ────────────────────────────────────────
         sep2 = SectionLabel(parent, "Output Mode")
@@ -223,9 +229,10 @@ class App:
 
         self._occ_output_mode = tk.StringVar(value="raw")
         modes = [
-            ("Full detail — one row per showtime",     "raw"),
-            ("Summary by movie — totals per film",     "by_movie"),
-            ("Summary by date — totals per day",       "by_date"),
+            ("Full detail — one row per showtime",              "raw"),
+            ("Summary by movie — totals per film",              "by_movie"),
+            ("Summary by date — totals per day",                "by_date"),
+            ("Complete report — all views in one workbook",     "full"),
         ]
         for label, value in modes:
             rb = tk.Radiobutton(parent, text=label, variable=self._occ_output_mode, value=value, anchor="w")
@@ -254,9 +261,10 @@ class App:
 
         self._txn_output_mode = tk.StringVar(value="raw")
         modes = [
-            ("Full detail — one row per item sold",            "raw"),
-            ("Summary by employee — totals per staff member",  "by_employee"),
-            ("Summary by category — totals per product type",  "by_category"),
+            ("Full detail — one row per item sold",             "raw"),
+            ("Summary by employee — totals per staff member",   "by_employee"),
+            ("Summary by category — totals per product type",   "by_category"),
+            ("Complete report — all views in one workbook",     "full"),
         ]
         for label, value in modes:
             rb = tk.Radiobutton(parent, text=label, variable=self._txn_output_mode, value=value, anchor="w")
@@ -433,6 +441,14 @@ class App:
             _write_summary_with_headers(summary_rows, columns, headers, "By Date", save_path, total_row)
             return len(summary_rows)
 
+        elif output_mode == "full":
+            from core.transformer import summarize_occupancy_by_date
+            gt = compute_grand_total_occupancy(filtered_rows)
+            by_movie = summarize_occupancy_by_movie(filtered_rows)
+            by_date  = summarize_occupancy_by_date(filtered_rows)
+            write_occupancy_full(filtered_rows, save_path, gt, by_movie, by_date)
+            return len(filtered_rows)
+
         raise ValueError(f"Unknown output mode: {output_mode!r}")
 
     def _write_transaction_output(self, filtered_rows, save_path, output_mode):
@@ -467,6 +483,13 @@ class App:
             ]
             _write_summary_with_headers(summary_rows, columns, headers, "By Category", save_path, total_row)
             return len(summary_rows)
+
+        elif output_mode == "full":
+            gt = compute_grand_total_transactions(filtered_rows)
+            by_emp = summarize_transactions_by_employee(filtered_rows)
+            by_cat = summarize_transactions_by_category(filtered_rows)
+            write_transaction_full(filtered_rows, save_path, gt, by_emp, by_cat)
+            return len(filtered_rows)
 
         raise ValueError(f"Unknown output mode: {output_mode!r}")
 

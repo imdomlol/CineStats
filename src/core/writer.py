@@ -165,6 +165,169 @@ def write_transaction_detail(rows, filepath, grand_total=None):
     wb.save(filepath)
 
 
+def write_occupancy_full(rows, filepath, grand_total, by_movie_rows, by_date_rows):
+    """
+    Writes a multi-sheet Occupancy workbook containing:
+      Sheet 1: "Detail"    — one row per showtime (same as write_occupancy)
+      Sheet 2: "By Movie"  — totals per film
+      Sheet 3: "By Date"   — totals per calendar day
+
+    This is the "Complete Report" output mode — everything in one file.
+
+    Args:
+        rows:          list of occupancy row dicts (filtered)
+        filepath:      destination path
+        grand_total:   dict from compute_grand_total_occupancy()
+        by_movie_rows: list from summarize_occupancy_by_movie()
+        by_date_rows:  list from summarize_occupancy_by_date()
+    """
+    wb = openpyxl.Workbook()
+
+    # ── Sheet 1: Full detail ───────────────────────────────────────────────
+    ws_detail = wb.active
+    ws_detail.title = "Detail"
+    _write_header(ws_detail, OCC_OUTPUT_COLUMNS)
+    for i, row in enumerate(rows, start=2):
+        data = [
+            row.get("date"),
+            row.get("movie", ""),
+            row.get("house", ""),
+            row.get("showtime", ""),
+            row.get("seats_sold", 0),
+            row.get("total_seats", 0),
+            row.get("occupancy_pct", "0.00%"),
+            row.get("box_gross", 0.0),
+        ]
+        _write_data_row(ws_detail, i, data, alternate=(i % 2 == 1))
+    _apply_column_format(ws_detail, col_index=8, fmt=_FMT_CURRENCY, start_row=2)
+    _apply_column_format(ws_detail, col_index=1, fmt=_FMT_DATE, start_row=2)
+    total_r = len(rows) + 2
+    _write_total_row(ws_detail, total_r, [
+        "TOTAL", "", "", "",
+        grand_total["seats_sold"], grand_total["total_seats"],
+        grand_total["occupancy_pct"], grand_total["box_gross"],
+    ])
+    _apply_column_format(ws_detail, col_index=8, fmt=_FMT_CURRENCY, start_row=total_r, end_row=total_r)
+    _auto_size_columns(ws_detail)
+
+    # ── Sheet 2: By Movie ──────────────────────────────────────────────────
+    ws_movie = wb.create_sheet("By Movie")
+    movie_headers = ["Movie", "Seats Sold", "Total Seats", "Occupancy %", "Box Gross ($)"]
+    movie_keys    = ["movie", "seats_sold", "total_seats", "occupancy_pct", "box_gross"]
+    _write_header(ws_movie, movie_headers)
+    for i, row in enumerate(by_movie_rows, start=2):
+        _write_data_row(ws_movie, i, [row.get(k, "") for k in movie_keys], alternate=(i % 2 == 1))
+    _apply_column_format(ws_movie, col_index=5, fmt=_FMT_CURRENCY, start_row=2)
+    _write_total_row(ws_movie, len(by_movie_rows) + 2, [
+        "TOTAL",
+        grand_total["seats_sold"], grand_total["total_seats"],
+        grand_total["occupancy_pct"], grand_total["box_gross"],
+    ])
+    _auto_size_columns(ws_movie)
+
+    # ── Sheet 3: By Date ───────────────────────────────────────────────────
+    ws_date = wb.create_sheet("By Date")
+    date_headers = ["Date", "Seats Sold", "Total Seats", "Occupancy %", "Box Gross ($)"]
+    date_keys    = ["date", "seats_sold", "total_seats", "occupancy_pct", "box_gross"]
+    _write_header(ws_date, date_headers)
+    for i, row in enumerate(by_date_rows, start=2):
+        _write_data_row(ws_date, i, [row.get(k, "") for k in date_keys], alternate=(i % 2 == 1))
+    _apply_column_format(ws_date, col_index=5, fmt=_FMT_CURRENCY, start_row=2)
+    _apply_column_format(ws_date, col_index=1, fmt=_FMT_DATE, start_row=2)
+    _write_total_row(ws_date, len(by_date_rows) + 2, [
+        "TOTAL",
+        grand_total["seats_sold"], grand_total["total_seats"],
+        grand_total["occupancy_pct"], grand_total["box_gross"],
+    ])
+    _auto_size_columns(ws_date)
+
+    wb.save(filepath)
+
+
+def write_transaction_full(rows, filepath, grand_total, by_employee_rows, by_category_rows):
+    """
+    Writes a multi-sheet Transaction Detail workbook containing:
+      Sheet 1: "Detail"      — one row per item sold
+      Sheet 2: "By Employee" — totals per staff member
+      Sheet 3: "By Category" — totals per product category
+
+    Args:
+        rows:               list of transaction item dicts (filtered)
+        filepath:           destination path
+        grand_total:        dict from compute_grand_total_transactions()
+        by_employee_rows:   list from summarize_transactions_by_employee()
+        by_category_rows:   list from summarize_transactions_by_category()
+    """
+    wb = openpyxl.Workbook()
+
+    # ── Sheet 1: Full detail ───────────────────────────────────────────────
+    ws_detail = wb.active
+    ws_detail.title = "Detail"
+    _write_header(ws_detail, TXN_OUTPUT_COLUMNS)
+    for i, row in enumerate(rows, start=2):
+        data = [
+            row.get("date"),
+            row.get("time", ""),
+            row.get("txn_id", ""),
+            row.get("terminal", ""),
+            row.get("employee", ""),
+            row.get("item_type", ""),
+            row.get("category", ""),
+            row.get("quantity", 0.0),
+            row.get("unit_price", 0.0),
+            row.get("pretax", 0.0),
+            row.get("tax", 0.0),
+            row.get("posttax", 0.0),
+            row.get("txn_total", 0.0),
+        ]
+        _write_data_row(ws_detail, i, data, alternate=(i % 2 == 1))
+    for col in [9, 10, 11, 12, 13]:
+        _apply_column_format(ws_detail, col_index=col, fmt=_FMT_CURRENCY, start_row=2)
+    _apply_column_format(ws_detail, col_index=1, fmt=_FMT_DATE, start_row=2)
+    total_r = len(rows) + 2
+    total_data = ["TOTAL", "", "", "", "", "", "", "", "", "", "", "", grand_total["total_sales"]]
+    _write_total_row(ws_detail, total_r, total_data)
+    ws_detail.cell(row=total_r, column=3).value = (
+        f"{grand_total['transaction_count']} transactions, {grand_total['item_count']} items"
+    )
+    _apply_column_format(ws_detail, col_index=13, fmt=_FMT_CURRENCY, start_row=total_r, end_row=total_r)
+    _auto_size_columns(ws_detail)
+
+    # ── Sheet 2: By Employee ───────────────────────────────────────────────
+    ws_emp = wb.create_sheet("By Employee")
+    emp_headers = ["Employee", "Transaction Count", "Item Count", "Total Sales ($)"]
+    emp_keys    = ["employee", "transaction_count", "item_count", "total_sales"]
+    _write_header(ws_emp, emp_headers)
+    for i, row in enumerate(by_employee_rows, start=2):
+        _write_data_row(ws_emp, i, [row.get(k, "") for k in emp_keys], alternate=(i % 2 == 1))
+    _apply_column_format(ws_emp, col_index=4, fmt=_FMT_CURRENCY, start_row=2)
+    _write_total_row(ws_emp, len(by_employee_rows) + 2, [
+        "TOTAL",
+        grand_total["transaction_count"],
+        grand_total["item_count"],
+        grand_total["total_sales"],
+    ])
+    _auto_size_columns(ws_emp)
+
+    # ── Sheet 3: By Category ───────────────────────────────────────────────
+    ws_cat = wb.create_sheet("By Category")
+    cat_headers = ["Category", "Item Count", "Total Quantity", "Total Sales ($)"]
+    cat_keys    = ["category", "item_count", "total_quantity", "total_sales"]
+    _write_header(ws_cat, cat_headers)
+    for i, row in enumerate(by_category_rows, start=2):
+        _write_data_row(ws_cat, i, [row.get(k, "") for k in cat_keys], alternate=(i % 2 == 1))
+    _apply_column_format(ws_cat, col_index=4, fmt=_FMT_CURRENCY, start_row=2)
+    _write_total_row(ws_cat, len(by_category_rows) + 2, [
+        "TOTAL",
+        sum(r["item_count"] for r in by_category_rows),
+        sum(r["total_quantity"] for r in by_category_rows),
+        grand_total["total_sales"],
+    ])
+    _auto_size_columns(ws_cat)
+
+    wb.save(filepath)
+
+
 def write_summary(rows, columns, sheet_title, filepath, grand_total_row=None):
     """
     Generic writer for summary/aggregated data (e.g. by-movie or by-employee views).
