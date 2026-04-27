@@ -1,0 +1,29 @@
+# Data directory — local xlsx input/output files, never committed
+data/
+
+# Python virtual environment
+.venv/
+venv/
+env/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Compiled/distributed binaries
+dist/
+build/
+*.spec
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# Editor config
+.vscode/
+.idea/
+
+# Claude
+.claude
+CLAUDE.md
