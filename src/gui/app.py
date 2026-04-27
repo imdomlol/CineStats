@@ -38,6 +38,8 @@ from core.transformer import (
     summarize_occupancy_by_movie,
     summarize_transactions_by_employee,
     summarize_transactions_by_category,
+    deduplicate_occupancy_rows,
+    summarize_occupancy_by_time_of_day,
 )
 from core.writer import (
     write_occupancy,
@@ -45,6 +47,7 @@ from core.writer import (
     write_summary,
     write_occupancy_full,
     write_transaction_full,
+    write_occupancy_by_time,
 )
 from gui.widgets import (
     FilePicker,
@@ -227,8 +230,9 @@ class App:
         sep2 = SectionLabel(parent, "Output Mode")
         widgets.append(sep2)
 
-        self._occ_output_mode = tk.StringVar(value="raw")
+        self._occ_output_mode = tk.StringVar(value="by_time")
         modes = [
+            ("Occupancy by Time — attendees per hour of day",   "by_time"),
             ("Full detail — one row per showtime",              "raw"),
             ("Summary by movie — totals per film",              "by_movie"),
             ("Summary by date — totals per day",                "by_date"),
@@ -313,7 +317,11 @@ class App:
                         f"'{os.path.basename(path)}' is a '{rtype}' report but the "
                         f"first file is '{report_type}'. All files must be the same type."
                     )
-                data = read_file(path)
+                data  = read_file(path)
+                mtime = os.path.getmtime(path)
+                for row in data["rows"]:
+                    row["_source_path"]  = path
+                    row["_source_mtime"] = mtime
                 all_rows.extend(data["rows"])
 
             if not all_rows:
@@ -424,7 +432,20 @@ class App:
 
         Returns the number of data rows written (excluding the header/total rows).
         """
-        if output_mode == "raw":
+        if output_mode == "by_time":
+            deduped = deduplicate_occupancy_rows(filtered_rows)
+            dates   = sorted(
+                {r["date"] for r in deduped if r.get("date")},
+                key=lambda d: d or datetime.date.min,
+            )
+            time_data = {}
+            for date in dates:
+                date_rows = [r for r in deduped if r["date"] == date]
+                time_data[date] = summarize_occupancy_by_time_of_day(date_rows)
+            write_occupancy_by_time(time_data, save_path)
+            return len(deduped)
+
+        elif output_mode == "raw":
             grand_total = compute_grand_total_occupancy(filtered_rows)
             write_occupancy(filtered_rows, save_path, grand_total=grand_total)
             return len(filtered_rows)

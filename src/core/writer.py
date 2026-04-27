@@ -328,6 +328,113 @@ def write_transaction_full(rows, filepath, grand_total, by_employee_rows, by_cat
     wb.save(filepath)
 
 
+def write_occupancy_by_time(time_data_by_date, filepath):
+    """
+    Writes a multi-sheet "Occupancy by Time" workbook — one sheet per date.
+
+    Each sheet uses a horizontal paired-column layout: for each hour of the
+    day that has showtimes, two columns are written (showtime label | seats sold).
+    A "Totals" label row followed by per-hour total rows closes the sheet.
+
+    Args:
+        time_data_by_date: ordered dict mapping datetime.date →
+            {hour_int: {"label": str, "showtimes": [(time_str, seats)], "total": int}}
+        filepath: destination path
+    """
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+
+    for date, hour_data in time_data_by_date.items():
+        sheet_title = date.strftime("%Y-%m-%d") if date else "Unknown"
+        ws = wb.create_sheet(sheet_title)
+        _write_by_time_sheet(ws, hour_data)
+
+    if not wb.sheetnames:
+        ws = wb.create_sheet("No Data")
+        ws.cell(row=1, column=1, value="No showtime data found.")
+
+    wb.save(filepath)
+
+
+def _write_by_time_sheet(ws, hour_data):
+    """
+    Writes the occupancy-by-time layout onto a single worksheet.
+
+    Layout:
+      Row 1:     Hour headers  — "10am" | blank | "11am" | blank | …
+      Rows 2-N:  Showtime data — time_str | seats  (paired per hour column)
+      Row N+1:   "Totals" label row (full-width navy)
+      Row N+2:   Per-hour totals — hour_label | total_seats  (paired per hour)
+    """
+    if not hour_data:
+        ws.cell(row=1, column=1, value="No data")
+        return
+
+    hours      = sorted(hour_data.keys())
+    total_cols = len(hours) * 2
+
+    header_font = Font(bold=True, color=_COLOUR_HEADER_FG, name="Calibri", size=11)
+    header_fill = PatternFill(fill_type="solid", fgColor=_COLOUR_HEADER_BG)
+    data_font   = Font(name="Calibri", size=10)
+    alt_fill    = PatternFill(fill_type="solid", fgColor=_COLOUR_ROW_ALT)
+    total_font  = Font(bold=True, color=_COLOUR_TOTAL_FG, name="Calibri", size=11)
+    total_fill  = PatternFill(fill_type="solid", fgColor=_COLOUR_TOTAL_BG)
+
+    # ── Row 1: hour headers ──────────────────────────────────────────────────
+    for i, hour in enumerate(hours):
+        col = 1 + i * 2
+        for offset in range(2):
+            cell = ws.cell(row=1, column=col + offset)
+            cell.font  = header_font
+            cell.fill  = header_fill
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+        ws.cell(row=1, column=col).value = hour_data[hour]["label"]
+    ws.freeze_panes = "A2"
+
+    # ── Rows 2-N: showtime data ──────────────────────────────────────────────
+    max_rows = max(len(h["showtimes"]) for h in hour_data.values())
+
+    for row_idx in range(max_rows):
+        row_num  = row_idx + 2
+        row_fill = alt_fill if row_num % 2 == 1 else None
+
+        for col in range(1, total_cols + 1):
+            cell = ws.cell(row=row_num, column=col)
+            cell.font = data_font
+            if row_fill:
+                cell.fill = row_fill
+
+        for i, hour in enumerate(hours):
+            col       = 1 + i * 2
+            showtimes = hour_data[hour]["showtimes"]
+            if row_idx < len(showtimes):
+                time_str, seats = showtimes[row_idx]
+                ws.cell(row=row_num, column=col).value     = time_str
+                ws.cell(row=row_num, column=col + 1).value = seats
+
+    # ── "Totals" label row ───────────────────────────────────────────────────
+    label_row  = max_rows + 2
+    values_row = max_rows + 3
+
+    for col in range(1, total_cols + 1):
+        cell = ws.cell(row=label_row, column=col)
+        cell.font = total_font
+        cell.fill = total_fill
+    ws.cell(row=label_row, column=1).value = "Totals"
+
+    # ── Per-hour totals row ──────────────────────────────────────────────────
+    for i, hour in enumerate(hours):
+        col = 1 + i * 2
+        for cell in (
+            ws.cell(row=values_row, column=col,     value=hour_data[hour]["label"]),
+            ws.cell(row=values_row, column=col + 1, value=hour_data[hour]["total"]),
+        ):
+            cell.font = total_font
+            cell.fill = total_fill
+
+    _auto_size_columns(ws)
+
+
 def write_summary(rows, columns, sheet_title, filepath, grand_total_row=None):
     """
     Generic writer for summary/aggregated data (e.g. by-movie or by-employee views).
